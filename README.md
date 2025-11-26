@@ -8,16 +8,43 @@
 - **Auto-Copy**: Uses `ssh-copy-id` to transfer keys securely.
 - **Config Management**: Optionally creates a convenient alias in `~/.ssh/config`.
 
+## Installation
+
+### Linux / macOS
+You can run **Aegis** directly without downloading it manually:
+
+```bash
+curl -sL https://raw.githubusercontent.com/toenihermes/aegis/main/aegis.sh | bash
+```
+
+### Windows (PowerShell)
+Run the following command in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/toenihermes/aegis/main/aegis.ps1 | iex
+```
+
 ## Usage
 
-1.  Make the script executable:
+Alternatively, if you want to download and run it manually:
+
+### Linux / macOS
+1.  Clone or download the script:
     ```bash
+    git clone https://github.com/toenihermes/aegis.git
+    cd aegis
     chmod +x aegis.sh
     ```
-
 2.  Run the wizard:
     ```bash
     ./aegis.sh
+    ```
+
+### Windows
+1.  Clone or download the script.
+2.  Run in PowerShell:
+    ```powershell
+    .\aegis.ps1
     ```
 
 3.  Follow the on-screen prompts to:
