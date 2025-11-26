@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Aegis
 # Secure and simple SSH key authentication setup
@@ -14,40 +14,43 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Helper functions
-log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1"; }
+log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
+log_warn() { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
+log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; }
 
 print_header() {
     clear
-    echo -e "${CYAN}"
-    echo "========================================"
-    echo "       Aegis - Secure SSH Setup         "
-    echo "========================================"
-    echo -e "${NC}"
+    printf "${CYAN}\n"
+    printf "========================================\n"
+    printf "       Aegis - Secure SSH Setup         \n"
+    printf "========================================\n"
+    printf "${NC}\n"
+}
+
+# Check for dependencies
+check_dependency() {
+    command -v "$1" >/dev/null 2>&1
 }
 
 # Main Wizard
 print_header
 
-echo "This wizard will help you set up SSH key-based authentication to a remote server."
-echo ""
+printf "This wizard will help you set up SSH key-based authentication to a remote server.\n\n"
 
 # Step 1: SSH Key Selection
-echo -e "${YELLOW}Step 1: SSH Key Setup${NC}"
-echo "Do you want to generate a new SSH key or use an existing one?"
-echo "1) Generate new key (Recommended for new setups)"
-echo "2) Use existing key"
+printf "${YELLOW}Step 1: SSH Key Setup${NC}\n"
+printf "Do you want to generate a new SSH key or use an existing one?\n"
+printf "1) Generate new key (Recommended for new setups)\n"
+printf "2) Use existing key\n"
 read -p "Select [1/2]: " key_choice
 
 SSH_KEY_PATH=""
 
 if [[ "$key_choice" == "1" ]]; then
-    echo ""
-    echo "Choose key type:"
-    echo "1) Ed25519 (Modern, secure, fast - Recommended)"
-    echo "2) RSA (Legacy compatibility)"
+    printf "\nChoose key type:\n"
+    printf "1) Ed25519 (Modern, secure, fast - Recommended)\n"
+    printf "2) RSA (Legacy compatibility)\n"
     read -p "Select [1/2]: " type_choice
 
     if [[ "$type_choice" == "2" ]]; then
@@ -79,17 +82,21 @@ if [[ "$key_choice" == "1" ]]; then
         fi
     fi
 
-    echo "Generating $KEY_TYPE key..."
-    ssh-keygen -t "$KEY_TYPE" -f "$SSH_KEY_PATH" -C "ssh-wizard-$(date +%Y%m%d)"
+    printf "Generating $KEY_TYPE key...\n"
+    ssh-keygen -t "$KEY_TYPE" -f "$SSH_KEY_PATH" -C "aegis-$(date +%Y%m%d)"
     log_success "Key generated at $SSH_KEY_PATH"
 
 elif [[ "$key_choice" == "2" ]]; then
-    echo ""
-    echo "Available keys in ~/.ssh/:"
-    ls "$HOME/.ssh/"id_* 2>/dev/null | grep -v ".pub" || echo "No standard keys found."
-    echo ""
+    printf "\nAvailable keys in ~/.ssh/:\n"
+    # Portable way to list keys, handling no matches gracefully
+    if ls "$HOME/.ssh/"id_* 1> /dev/null 2>&1; then
+        ls "$HOME/.ssh/"id_* 2>/dev/null | grep -v ".pub" || printf "No standard keys found.\n"
+    else
+        printf "No standard keys found in ~/.ssh/\n"
+    fi
+    printf "\n"
     read -p "Enter full path to your private key (e.g., ~/.ssh/id_ed25519): " input_path
-    # Expand tilde manually if needed, though shell usually handles it on input
+    # Expand tilde manually if needed
     SSH_KEY_PATH="${input_path/#\~/$HOME}"
     
     if [[ ! -f "$SSH_KEY_PATH" ]]; then
@@ -103,8 +110,7 @@ else
 fi
 
 # Step 2: Remote Host Info
-echo ""
-echo -e "${YELLOW}Step 2: Remote Server Details${NC}"
+printf "\n${YELLOW}Step 2: Remote Server Details${NC}\n"
 read -p "Remote User (e.g., root, ubuntu): " REMOTE_USER
 read -p "Remote Host (IP or Domain): " REMOTE_HOST
 read -p "Remote Port (default: 22): " REMOTE_PORT
@@ -116,24 +122,33 @@ if [[ -z "$REMOTE_USER" || -z "$REMOTE_HOST" ]]; then
 fi
 
 # Step 3: Copy ID
-echo ""
-echo -e "${YELLOW}Step 3: Copying Public Key to Remote${NC}"
-echo "Attempting to copy public key to $REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT..."
-echo "You may be asked for the remote user's password."
+printf "\n${YELLOW}Step 3: Copying Public Key to Remote${NC}\n"
+printf "Attempting to copy public key to $REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT...\n"
+printf "You may be asked for the remote user's password.\n"
 
-ssh-copy-id -i "${SSH_KEY_PATH}.pub" -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST"
+PUB_KEY="${SSH_KEY_PATH}.pub"
 
-if [[ $? -eq 0 ]]; then
+if check_dependency ssh-copy-id; then
+    # Use ssh-copy-id if available
+    ssh-copy-id -i "$PUB_KEY" -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST"
+    COPY_STATUS=$?
+else
+    # Fallback for macOS/systems without ssh-copy-id
+    log_info "ssh-copy-id not found. Using manual fallback..."
+    cat "$PUB_KEY" | ssh -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+    COPY_STATUS=$?
+fi
+
+if [[ $COPY_STATUS -eq 0 ]]; then
     log_success "Public key successfully added to remote host!"
 else
     log_error "Failed to copy ID. Please check connectivity and password."
-    echo "Manual fallback: Copy the content of ${SSH_KEY_PATH}.pub to ~/.ssh/authorized_keys on the remote server."
+    printf "Manual fallback: Copy the content of $PUB_KEY to ~/.ssh/authorized_keys on the remote server.\n"
     exit 1
 fi
 
 # Step 4: Config Alias
-echo ""
-echo -e "${YELLOW}Step 4: SSH Config Alias (Optional)${NC}"
+printf "\n${YELLOW}Step 4: SSH Config Alias (Optional)${NC}\n"
 read -p "Do you want to create a shortcut alias? (e.g., 'ssh myserver') [y/N]: " create_alias
 
 if [[ "$create_alias" == "y" || "$create_alias" == "Y" ]]; then
@@ -146,21 +161,20 @@ if [[ "$create_alias" == "y" || "$create_alias" == "Y" ]]; then
     if grep -q "Host $ALIAS_NAME" "$CONFIG_FILE"; then
         log_warn "Host '$ALIAS_NAME' already exists in $CONFIG_FILE. Skipping."
     else
-        echo "" >> "$CONFIG_FILE"
-        echo "Host $ALIAS_NAME" >> "$CONFIG_FILE"
-        echo "    HostName $REMOTE_HOST" >> "$CONFIG_FILE"
-        echo "    User $REMOTE_USER" >> "$CONFIG_FILE"
-        echo "    Port $REMOTE_PORT" >> "$CONFIG_FILE"
-        echo "    IdentityFile $SSH_KEY_PATH" >> "$CONFIG_FILE"
+        printf "\n" >> "$CONFIG_FILE"
+        printf "Host $ALIAS_NAME\n" >> "$CONFIG_FILE"
+        printf "    HostName $REMOTE_HOST\n" >> "$CONFIG_FILE"
+        printf "    User $REMOTE_USER\n" >> "$CONFIG_FILE"
+        printf "    Port $REMOTE_PORT\n" >> "$CONFIG_FILE"
+        printf "    IdentityFile $SSH_KEY_PATH\n" >> "$CONFIG_FILE"
         
         log_success "Alias '$ALIAS_NAME' added to $CONFIG_FILE"
-        echo "You can now connect using: ssh $ALIAS_NAME"
+        printf "You can now connect using: ssh $ALIAS_NAME\n"
     fi
 fi
 
 # Step 5: Test
-echo ""
-echo -e "${YELLOW}Step 5: Verification${NC}"
+printf "\n${YELLOW}Step 5: Verification${NC}\n"
 read -p "Do you want to test the connection now? [y/N]: " test_conn
 if [[ "$test_conn" == "y" || "$test_conn" == "Y" ]]; then
     if [[ -n "$ALIAS_NAME" ]]; then
@@ -176,5 +190,4 @@ if [[ "$test_conn" == "y" || "$test_conn" == "Y" ]]; then
     fi
 fi
 
-echo ""
-echo "Setup complete. Happy hacking!"
+printf "\nSetup complete. Happy hacking!\n"
