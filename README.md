@@ -11,8 +11,14 @@
 ## Installation
 
 ### Linux / macOS
-You can run **Aegis** directly without downloading it manually:
+You can run **Aegis** directly without downloading it manually. 
 
+**Recommended (preserves interactive input):**
+```bash
+bash <(curl -sL https://raw.githubusercontent.com/toenihermes/aegis/main/aegis.sh)
+```
+
+**Alternative:**
 ```bash
 curl -sL https://raw.githubusercontent.com/toenihermes/aegis/main/aegis.sh | bash
 ```

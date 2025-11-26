@@ -69,7 +69,11 @@ while true; do
     printf "1) Generate new key (Recommended for new setups)\n"
     printf "2) Use existing key\n"
     
-    read_input "Select [1/2]: " key_choice
+    if ! read_input "Select [1/2]: " key_choice; then
+        printf "\n"
+        log_error "Input stream closed. Aborting."
+        exit 1
+    fi
     
     if [[ "$key_choice" == "1" || "$key_choice" == "2" ]]; then
         break
@@ -86,7 +90,12 @@ if [[ "$key_choice" == "1" ]]; then
     printf "2) RSA (Legacy compatibility)\n"
     
     while true; do
-        read_input "Select [1/2]: " type_choice
+        if ! read_input "Select [1/2]: " type_choice; then
+             printf "\n"
+             log_error "Input stream closed. Aborting."
+             exit 1
+        fi
+        
         if [[ "$type_choice" == "1" || "$type_choice" == "2" ]]; then
             break
         fi
@@ -137,7 +146,12 @@ elif [[ "$key_choice" == "2" ]]; then
     printf "\n"
     
     while true; do
-        read_input "Enter full path to your private key (e.g., ~/.ssh/id_ed25519): " input_path
+        if ! read_input "Enter full path to your private key (e.g., ~/.ssh/id_ed25519): " input_path; then
+             printf "\n"
+             log_error "Input stream closed. Aborting."
+             exit 1
+        fi
+        
         # Expand tilde manually if needed
         SSH_KEY_PATH="${input_path/#\~/$HOME}"
         
