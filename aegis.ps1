@@ -26,10 +26,19 @@ Write-Host "This wizard will help you set up SSH key-based authentication to a r
 
 # Step 1: SSH Key Selection
 Write-Host "Step 1: SSH Key Setup" -ForegroundColor Yellow
-Write-Host "Do you want to generate a new SSH key or use an existing one?"
-Write-Host "1) Generate new key (Recommended for new setups)"
-Write-Host "2) Use existing key"
-$keyChoice = Read-Host "Select [1/2]"
+
+while ($true) {
+    Write-Host "Do you want to generate a new SSH key or use an existing one?"
+    Write-Host "1) Generate new key (Recommended for new setups)"
+    Write-Host "2) Use existing key"
+    $keyChoice = Read-Host "Select [1/2]"
+
+    if ($keyChoice -eq "1" -or $keyChoice -eq "2") {
+        break
+    }
+    Write-ErrorMsg "Invalid selection. Please enter 1 or 2."
+    Write-Host ""
+}
 
 $sshKeyPath = ""
 
@@ -37,7 +46,14 @@ if ($keyChoice -eq "1") {
     Write-Host "`nChoose key type:"
     Write-Host "1) Ed25519 (Modern, secure, fast - Recommended)"
     Write-Host "2) RSA (Legacy compatibility)"
-    $typeChoice = Read-Host "Select [1/2]"
+    
+    while ($true) {
+        $typeChoice = Read-Host "Select [1/2]"
+        if ($typeChoice -eq "1" -or $typeChoice -eq "2") {
+            break
+        }
+        Write-ErrorMsg "Invalid selection. Please enter 1 or 2."
+    }
 
     if ($typeChoice -eq "2") {
         $keyType = "rsa"
@@ -84,21 +100,22 @@ if ($keyChoice -eq "1") {
     }
     
     Write-Host ""
-    $inputPath = Read-Host "Enter full path to your private key (e.g., C:\Users\Name\.ssh\id_ed25519)"
-    # Expand tilde if present
-    if ($inputPath.StartsWith("~")) {
-        $inputPath = $inputPath.Replace("~", $HOME)
-    }
-    $sshKeyPath = $inputPath
+    
+    while ($true) {
+        $inputPath = Read-Host "Enter full path to your private key (e.g., C:\Users\Name\.ssh\id_ed25519)"
+        # Expand tilde if present
+        if ($inputPath.StartsWith("~")) {
+            $inputPath = $inputPath.Replace("~", $HOME)
+        }
+        $sshKeyPath = $inputPath
 
-    if (-not (Test-Path $sshKeyPath)) {
+        if (Test-Path $sshKeyPath) {
+            break
+        }
         Write-ErrorMsg "File not found: $sshKeyPath"
-        exit 1
+        Write-Host "Please try again."
     }
     Write-Info "Using key: $sshKeyPath"
-} else {
-    Write-ErrorMsg "Invalid selection."
-    exit 1
 }
 
 # Step 2: Remote Host Info
