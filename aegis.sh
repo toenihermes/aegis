@@ -34,12 +34,27 @@ check_dependency() {
 }
 
 # Determine input source for interactive prompts
-# This is critical for 'curl | bash' usage where stdin is the script itself
 if [ -c /dev/tty ]; then
     INPUT_SOURCE="/dev/tty"
 else
     INPUT_SOURCE="/dev/stdin"
 fi
+
+# Helper to read input safely
+read_input() {
+    local prompt="$1"
+    local var_name="$2"
+    local input_value
+    
+    # Read from the determined source
+    if read -r -p "$prompt" input_value < "$INPUT_SOURCE"; then
+        # Trim whitespace (leading/trailing)
+        input_value="$(echo "$input_value" | xargs)"
+        eval "$var_name=\"$input_value\""
+    else
+        return 1
+    fi
+}
 
 # Main Wizard
 print_header
@@ -48,10 +63,20 @@ printf "This wizard will help you set up SSH key-based authentication to a remot
 
 # Step 1: SSH Key Selection
 printf "${YELLOW}Step 1: SSH Key Setup${NC}\n"
-printf "Do you want to generate a new SSH key or use an existing one?\n"
-printf "1) Generate new key (Recommended for new setups)\n"
-printf "2) Use existing key\n"
-read -p "Select [1/2]: " key_choice < "$INPUT_SOURCE"
+
+while true; do
+    printf "Do you want to generate a new SSH key or use an existing one?\n"
+    printf "1) Generate new key (Recommended for new setups)\n"
+    printf "2) Use existing key\n"
+    
+    read_input "Select [1/2]: " key_choice
+    
+    if [[ "$key_choice" == "1" || "$key_choice" == "2" ]]; then
+        break
+    fi
+    log_error "Invalid selection: '$key_choice'. Please enter 1 or 2."
+    printf "\n"
+done
 
 SSH_KEY_PATH=""
 
@@ -59,7 +84,14 @@ if [[ "$key_choice" == "1" ]]; then
     printf "\nChoose key type:\n"
     printf "1) Ed25519 (Modern, secure, fast - Recommended)\n"
     printf "2) RSA (Legacy compatibility)\n"
-    read -p "Select [1/2]: " type_choice < "$INPUT_SOURCE"
+    
+    while true; do
+        read_input "Select [1/2]: " type_choice
+        if [[ "$type_choice" == "1" || "$type_choice" == "2" ]]; then
+            break
+        fi
+        log_error "Invalid selection. Please enter 1 or 2."
+    done
 
     if [[ "$type_choice" == "2" ]]; then
         KEY_TYPE="rsa"
@@ -69,7 +101,7 @@ if [[ "$key_choice" == "1" ]]; then
         DEFAULT_NAME="id_ed25519"
     fi
 
-    read -p "Enter file name for new key (default: ~/.ssh/$DEFAULT_NAME): " key_name < "$INPUT_SOURCE"
+    read_input "Enter file name for new key (default: ~/.ssh/$DEFAULT_NAME): " key_name
     if [[ -z "$key_name" ]]; then
         SSH_KEY_PATH="$HOME/.ssh/$DEFAULT_NAME"
     else
@@ -83,7 +115,7 @@ if [[ "$key_choice" == "1" ]]; then
 
     if [[ -f "$SSH_KEY_PATH" ]]; then
         log_warn "Key already exists at $SSH_KEY_PATH"
-        read -p "Overwrite? (y/N): " overwrite < "$INPUT_SOURCE"
+        read_input "Overwrite? (y/N): " overwrite
         if [[ "$overwrite" != "y" && "$overwrite" != "Y" ]]; then
             log_error "Aborted by user."
             exit 1
@@ -103,25 +135,26 @@ elif [[ "$key_choice" == "2" ]]; then
         printf "No standard keys found in ~/.ssh/\n"
     fi
     printf "\n"
-    read -p "Enter full path to your private key (e.g., ~/.ssh/id_ed25519): " input_path < "$INPUT_SOURCE"
-    # Expand tilde manually if needed
-    SSH_KEY_PATH="${input_path/#\~/$HOME}"
     
-    if [[ ! -f "$SSH_KEY_PATH" ]]; then
+    while true; do
+        read_input "Enter full path to your private key (e.g., ~/.ssh/id_ed25519): " input_path
+        # Expand tilde manually if needed
+        SSH_KEY_PATH="${input_path/#\~/$HOME}"
+        
+        if [[ -f "$SSH_KEY_PATH" ]]; then
+            break
+        fi
         log_error "File not found: $SSH_KEY_PATH"
-        exit 1
-    fi
+        printf "Please try again.\n"
+    done
     log_info "Using key: $SSH_KEY_PATH"
-else
-    log_error "Invalid selection."
-    exit 1
 fi
 
 # Step 2: Remote Host Info
 printf "\n${YELLOW}Step 2: Remote Server Details${NC}\n"
-read -p "Remote User (e.g., root, ubuntu): " REMOTE_USER < "$INPUT_SOURCE"
-read -p "Remote Host (IP or Domain): " REMOTE_HOST < "$INPUT_SOURCE"
-read -p "Remote Port (default: 22): " REMOTE_PORT < "$INPUT_SOURCE"
+read_input "Remote User (e.g., root, ubuntu): " REMOTE_USER
+read_input "Remote Host (IP or Domain): " REMOTE_HOST
+read_input "Remote Port (default: 22): " REMOTE_PORT
 REMOTE_PORT=${REMOTE_PORT:-22}
 
 if [[ -z "$REMOTE_USER" || -z "$REMOTE_HOST" ]]; then
@@ -157,10 +190,10 @@ fi
 
 # Step 4: Config Alias
 printf "\n${YELLOW}Step 4: SSH Config Alias (Optional)${NC}\n"
-read -p "Do you want to create a shortcut alias? (e.g., 'ssh myserver') [y/N]: " create_alias < "$INPUT_SOURCE"
+read_input "Do you want to create a shortcut alias? (e.g., 'ssh myserver') [y/N]: " create_alias
 
 if [[ "$create_alias" == "y" || "$create_alias" == "Y" ]]; then
-    read -p "Enter alias name (e.g., production): " ALIAS_NAME < "$INPUT_SOURCE"
+    read_input "Enter alias name (e.g., production): " ALIAS_NAME
     
     CONFIG_FILE="$HOME/.ssh/config"
     mkdir -p "$HOME/.ssh"
@@ -183,7 +216,7 @@ fi
 
 # Step 5: Test
 printf "\n${YELLOW}Step 5: Verification${NC}\n"
-read -p "Do you want to test the connection now? [y/N]: " test_conn < "$INPUT_SOURCE"
+read_input "Do you want to test the connection now? [y/N]: " test_conn
 if [[ "$test_conn" == "y" || "$test_conn" == "Y" ]]; then
     if [[ -n "$ALIAS_NAME" ]]; then
         ssh -q "$ALIAS_NAME" exit
